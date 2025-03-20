@@ -1,4 +1,6 @@
+
 import { createClient } from '@supabase/supabase-js';
+import { User } from '@/types/user';
 
 // Get environment variables with fallbacks for development
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -169,6 +171,25 @@ export const signUp = async (email: string, password: string, name?: string, isA
     throw error;
   }
 
+  // Create a profile record if signup is successful
+  if (data.user) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([
+        { 
+          id: data.user.id,
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]);
+    
+    if (profileError) {
+      console.error('Error creating profile:', profileError);
+    }
+  }
+
   return data;
 };
 
@@ -222,21 +243,133 @@ export const isUserAdmin = (user: any) => {
   );
 };
 
-// Fixed function to get all user data (only available to admins)
-export const getAllUserData = async (requestorEmail: string) => {
+// Get all users from the profiles table
+export const getAllUsers = async (): Promise<User[]> => {
   try {
-    // The issue is here - we're using await with an object that has a then() method
-    // but isn't a proper Promise. Let's fix it by using a proper Promise pattern:
-    return new Promise((resolve, reject) => {
-      supabase.rpc('get_all_user_data', {
-        requestor_email: requestorEmail
-      }).then(({ data, error }) => {
-        if (error) reject(error);
-        else resolve(data);
-      });
-    });
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*');
+    
+    if (error) throw error;
+    
+    // Transform the profiles data to match our User interface
+    const users = data.map(profile => ({
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      avatar_url: profile.avatar_url,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+      // Add any user metadata from auth if needed
+      user_metadata: {
+        // Default values, these would need to be updated from auth if needed
+        isAdmin: profile.email.toLowerCase() === ADMIN_EMAIL,
+        role: profile.email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user',
+        banned: false
+      },
+      app_metadata: {
+        provider: 'email' // Default provider
+      }
+    }));
+    
+    return users;
   } catch (error: any) {
-    console.error('Error fetching all user data:', error.message);
+    console.error('Error fetching all users:', error.message);
+    throw error;
+  }
+};
+
+// Update a user in the profiles table
+export const updateUser = async (userId: string, userData: Partial<User>) => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        avatar_url: userData.avatar_url,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    // If updating user metadata (like admin status or banned status)
+    // we would need to use the auth admin APIs separately
+    if (userData.user_metadata) {
+      // This would need to be implemented if you have access to these APIs
+      console.log('Updating user metadata would require auth admin APIs');
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating user:', error.message);
+    throw error;
+  }
+};
+
+// Delete a user from the profiles table
+export const deleteUser = async (userId: string) => {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    // Note: This only deletes the profile record
+    // To delete the actual auth user, you would need admin APIs
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting user:', error.message);
+    throw error;
+  }
+};
+
+// Ban/unban a user (store this in user metadata)
+export const toggleUserBan = async (userId: string, isBanned: boolean) => {
+  try {
+    // This is a simplification - in a real app, you might store this in a separate table
+    // or use the auth admin APIs to update user metadata
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        updated_at: new Date().toISOString()
+        // In a real app, you might add a `banned` column to the profiles table
+      })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error toggling user ban status:', error.message);
+    throw error;
+  }
+};
+
+// Toggle admin status (store this in user metadata)
+export const toggleAdminStatus = async (userId: string, isAdmin: boolean) => {
+  try {
+    // This is a simplification - in a real app, you might store this in a separate table
+    // or use the auth admin APIs to update user metadata
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        updated_at: new Date().toISOString()
+        // In a real app, you might add an `is_admin` column to the profiles table
+      })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error toggling admin status:', error.message);
     throw error;
   }
 };

@@ -1,11 +1,14 @@
 
 export interface User {
   id: string;
+  name?: string;
   email: string;
+  phone?: string;
+  avatar_url?: string;
   created_at: string;
+  updated_at?: string;
   last_sign_in?: string;
   user_metadata?: {
-    name?: string;
     isAdmin?: boolean;
     role?: string;
     banned?: boolean;

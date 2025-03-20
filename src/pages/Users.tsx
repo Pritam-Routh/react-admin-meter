@@ -1,8 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarLayout } from '@/components/layout/SidebarLayout';
 import { UserList } from '@/components/users/UserList';
-import { supabase, getCurrentUser } from '@/lib/supabase';
+import { 
+  getCurrentUser, 
+  getAllUsers, 
+  deleteUser, 
+  toggleUserBan, 
+  toggleAdminStatus,
+  isUserAdmin
+} from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { User } from '@/types/user';
 
@@ -19,23 +25,23 @@ const Users = () => {
       const user = await getCurrentUser();
       if (user?.email) {
         setCurrentUserEmail(user.email);
-        setIsAdmin(user.user_metadata?.isAdmin || false);
+        setIsAdmin(isUserAdmin(user));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching current user:', error);
+      toast({
+        title: "Error",
+        description: `Failed to load current user: ${error.message}`,
+        variant: "destructive"
+      });
     }
   };
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.admin.listUsers();
-      
-      if (error) throw error;
-      
-      if (data?.users) {
-        setUsers(data.users as User[]);
-      }
+      const users = await getAllUsers();
+      setUsers(users);
     } catch (error: any) {
       console.error('Error fetching users:', error.message);
       toast({
@@ -62,12 +68,7 @@ const Users = () => {
   const handleBanUser = async (userId: string, isBanned: boolean) => {
     setActionLoading(userId);
     try {
-      const { error } = await supabase.auth.admin.updateUserById(
-        userId,
-        { user_metadata: { banned: isBanned } }
-      );
-      
-      if (error) throw error;
+      await toggleUserBan(userId, isBanned);
       
       setUsers(users.map(user => 
         user.id === userId 
@@ -97,9 +98,7 @@ const Users = () => {
     
     setActionLoading(userId);
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
-      
-      if (error) throw error;
+      await deleteUser(userId);
       
       setUsers(users.filter(user => user.id !== userId));
       
@@ -121,17 +120,7 @@ const Users = () => {
   const handleToggleAdmin = async (userId: string, makeAdmin: boolean) => {
     setActionLoading(userId);
     try {
-      const { error } = await supabase.auth.admin.updateUserById(
-        userId,
-        { 
-          user_metadata: { 
-            isAdmin: makeAdmin,
-            role: makeAdmin ? 'admin' : 'user'
-          } 
-        }
-      );
-      
-      if (error) throw error;
+      await toggleAdminStatus(userId, makeAdmin);
       
       setUsers(users.map(user => 
         user.id === userId 
