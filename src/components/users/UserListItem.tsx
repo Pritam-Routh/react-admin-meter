@@ -65,7 +65,7 @@ export const UserListItem = ({
             <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
           </Avatar>
           <div>
-            <div className="font-medium">{user.user_metadata?.name || user.email.split('@')[0]}</div>
+            <div className="font-medium">{user.name || user.user_metadata?.name || user.email.split('@')[0]}</div>
             <div className="text-gray-500 text-xs">{user.email}</div>
           </div>
         </div>

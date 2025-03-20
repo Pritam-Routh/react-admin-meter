@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { User } from '@/types/user';
 
@@ -8,6 +7,46 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Define allowed admin emails
 export const ADMIN_EMAIL = 'pritamrouth2003@gmail.com';
+
+// Sample data for the mock client
+const mockUsers = [
+  {
+    id: '1',
+    email: 'admin@example.com',
+    name: 'Admin User',
+    created_at: new Date().toISOString(),
+    last_sign_in: new Date().toISOString(),
+    user_metadata: { name: 'Admin User', isAdmin: true, role: 'admin' },
+    app_metadata: { provider: 'google' }
+  },
+  {
+    id: '2',
+    email: 'user@example.com',
+    name: 'Regular User',
+    created_at: new Date().toISOString(),
+    last_sign_in: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    user_metadata: { name: 'Regular User', isAdmin: false, role: 'user' },
+    app_metadata: { provider: 'email' }
+  },
+  {
+    id: '3',
+    email: 'banned@example.com',
+    name: 'Banned User',
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    last_sign_in: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    user_metadata: { name: 'Banned User', isAdmin: false, role: 'user', banned: true },
+    app_metadata: { provider: 'github' }
+  },
+  {
+    id: '4',
+    email: 'pritamrouth2003@gmail.com',
+    name: 'Pritam Routh',
+    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    last_sign_in: new Date().toISOString(),
+    user_metadata: { name: 'Pritam Routh', isAdmin: true, role: 'admin' },
+    app_metadata: { provider: 'google' }
+  }
+];
 
 // Create a single supabase client for interacting with your database
 export const supabase = (() => {
@@ -30,40 +69,7 @@ export const supabase = (() => {
         admin: {
           listUsers: async () => ({ 
             data: { 
-              users: [
-                {
-                  id: '1',
-                  email: 'admin@example.com',
-                  created_at: new Date().toISOString(),
-                  last_sign_in: new Date().toISOString(),
-                  user_metadata: { name: 'Admin User', isAdmin: true, role: 'admin' },
-                  app_metadata: { provider: 'google' }
-                },
-                {
-                  id: '2',
-                  email: 'user@example.com',
-                  created_at: new Date().toISOString(),
-                  last_sign_in: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-                  user_metadata: { name: 'Regular User', isAdmin: false, role: 'user' },
-                  app_metadata: { provider: 'email' }
-                },
-                {
-                  id: '3',
-                  email: 'banned@example.com',
-                  created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                  last_sign_in: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                  user_metadata: { name: 'Banned User', isAdmin: false, role: 'user', banned: true },
-                  app_metadata: { provider: 'github' }
-                },
-                {
-                  id: '4',
-                  email: 'pritamrouth2003@gmail.com',
-                  created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-                  last_sign_in: new Date().toISOString(),
-                  user_metadata: { name: 'Pritam Routh', isAdmin: true, role: 'admin' },
-                  app_metadata: { provider: 'google' }
-                }
-              ]
+              users: mockUsers
             }, 
             error: null 
           }),
@@ -77,7 +83,27 @@ export const supabase = (() => {
             single: async () => ({ data: null, error: null }),
             limit: () => ({ data: [], error: null })
           })
-        })
+        }),
+        insert: (data) => {
+          console.log('Mock insert:', data);
+          return { 
+            select: () => ({ data: data, error: null })
+          };
+        },
+        update: (data) => {
+          console.log('Mock update:', data);
+          return { 
+            eq: () => ({ 
+              select: () => ({ data: data, error: null }) 
+            })
+          };
+        },
+        delete: () => {
+          console.log('Mock delete');
+          return { 
+            eq: () => ({ error: null }) 
+          };
+        }
       }),
       rpc: (fnName: string, params?: any) => ({
         then: (callback: Function) => {
@@ -92,48 +118,7 @@ export const supabase = (() => {
             if (params?.requestor_email === ADMIN_EMAIL || 
                 params?.requestor_email === 'admin@example.com') {
               return callback({ 
-                data: [
-                  {
-                    id: '1',
-                    email: 'admin@example.com',
-                    name: 'Admin User',
-                    role: 'admin',
-                    created_at: new Date().toISOString(),
-                    last_sign_in: new Date().toISOString(),
-                    app_metadata: { provider: 'email' },
-                    user_metadata: { isAdmin: true, role: 'admin' }
-                  },
-                  {
-                    id: '2',
-                    email: 'user@example.com',
-                    name: 'Regular User',
-                    role: 'user',
-                    created_at: new Date().toISOString(),
-                    last_sign_in: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-                    app_metadata: { provider: 'email' },
-                    user_metadata: { isAdmin: false, role: 'user' }
-                  },
-                  {
-                    id: '3',
-                    email: 'banned@example.com',
-                    name: 'Banned User',
-                    role: 'user',
-                    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    last_sign_in: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    app_metadata: { provider: 'email' },
-                    user_metadata: { isAdmin: false, role: 'user', banned: true }
-                  },
-                  {
-                    id: '4',
-                    email: 'pritamrouth2003@gmail.com',
-                    name: 'Pritam Routh',
-                    role: 'admin',
-                    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-                    last_sign_in: new Date().toISOString(),
-                    app_metadata: { provider: 'google' },
-                    user_metadata: { isAdmin: true, role: 'admin' }
-                  }
-                ],
+                data: mockUsers,
                 error: null
               });
             } else {
@@ -246,6 +231,11 @@ export const isUserAdmin = (user: any) => {
 // Get all users from the profiles table
 export const getAllUsers = async (): Promise<User[]> => {
   try {
+    // For the mock client, we'll return the mockUsers
+    if (!supabaseUrl || !supabaseKey) {
+      return mockUsers as User[];
+    }
+    
     const { data, error } = await supabase
       .from('profiles')
       .select('*');
@@ -266,7 +256,8 @@ export const getAllUsers = async (): Promise<User[]> => {
         // Default values, these would need to be updated from auth if needed
         isAdmin: profile.email.toLowerCase() === ADMIN_EMAIL,
         role: profile.email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user',
-        banned: false
+        banned: false,
+        name: profile.name
       },
       app_metadata: {
         provider: 'email' // Default provider

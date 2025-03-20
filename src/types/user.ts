@@ -12,6 +12,7 @@ export interface User {
     isAdmin?: boolean;
     role?: string;
     banned?: boolean;
+    name?: string;
   };
   app_metadata?: {
     provider?: string;
