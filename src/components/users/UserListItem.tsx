@@ -22,10 +22,12 @@ export const UserListItem = ({
   onToggleAdmin,
   actionLoading
 }: UserListItemProps) => {
-  const getInitials = (email: string) => {
-    const name = email.split('@')[0];
+  // Get the user's display name from various possible sources
+  const displayName = user.name || user.user_metadata?.name || user.email.split('@')[0];
+  
+  const getInitials = (name: string) => {
     return name
-      .split('.')
+      .split(' ')
       .map(n => n[0])
       .join('')
       .toUpperCase()
@@ -62,10 +64,10 @@ export const UserListItem = ({
       <td className="px-4 py-3">
         <div className="flex items-center space-x-3">
           <Avatar className="h-8 w-8">
-            <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+            <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
           </Avatar>
           <div>
-            <div className="font-medium">{user.name || user.user_metadata?.name || user.email.split('@')[0]}</div>
+            <div className="font-medium">{displayName}</div>
             <div className="text-gray-500 text-xs">{user.email}</div>
           </div>
         </div>

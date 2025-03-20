@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { User } from '@/types/user';
 
@@ -82,26 +83,31 @@ export const supabase = (() => {
           eq: () => ({
             single: async () => ({ data: null, error: null }),
             limit: () => ({ data: [], error: null })
-          })
+          }),
+          limit: () => ({ data: [], error: null }),
+          data: mockUsers,
+          error: null
         }),
         insert: (data) => {
           console.log('Mock insert:', data);
           return { 
-            select: () => ({ data: data, error: null })
+            select: () => ({ data, error: null })
           };
         },
         update: (data) => {
           console.log('Mock update:', data);
           return { 
             eq: () => ({ 
-              select: () => ({ data: data, error: null }) 
-            })
+              select: () => ({ data, error: null }) 
+            }),
+            match: (criteria) => ({ data, error: null })
           };
         },
         delete: () => {
           console.log('Mock delete');
           return { 
-            eq: () => ({ error: null }) 
+            eq: () => ({ data: null, error: null }),
+            match: (criteria) => ({ data: null, error: null })
           };
         }
       }),
@@ -140,42 +146,48 @@ export const supabase = (() => {
 export const signUp = async (email: string, password: string, name?: string, isAdmin = false) => {
   const forceAdmin = email.toLowerCase() === ADMIN_EMAIL;
 
-  const { data, error } = await supabase.auth.signUp({
-    email: email.toLowerCase(),
-    password,
-    options: {
-      data: {
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: email.toLowerCase(),
+      password,
+      options: {
+        data: {
+          name: name || email.split('@')[0],
+          isAdmin: forceAdmin || isAdmin,
+          role: forceAdmin ? 'admin' : 'user'
+        }
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    // Create a profile record if signup is successful
+    if (data.user) {
+      const profileData = { 
+        id: data.user.id,
         name: name || email.split('@')[0],
-        isAdmin: forceAdmin || isAdmin,
-        role: forceAdmin ? 'admin' : 'user'
+        email: email.toLowerCase(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const insertResponse = await supabase
+        .from('profiles')
+        .insert([profileData])
+        .select();
+      
+      if (insertResponse.error) {
+        console.error('Error creating profile:', insertResponse.error);
       }
     }
-  });
 
-  if (error) {
+    return data;
+  } catch (error) {
+    console.error('Error in signUp:', error);
     throw error;
   }
-
-  // Create a profile record if signup is successful
-  if (data.user) {
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert([
-        { 
-          id: data.user.id,
-          name: name || email.split('@')[0],
-          email: email.toLowerCase(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ]);
-    
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-    }
-  }
-
-  return data;
 };
 
 export const signIn = async (email: string, password: string) => {
@@ -236,14 +248,17 @@ export const getAllUsers = async (): Promise<User[]> => {
       return mockUsers as User[];
     }
     
-    const { data, error } = await supabase
+    // For the real client, fetch from profiles table
+    const response = await supabase
       .from('profiles')
       .select('*');
     
-    if (error) throw error;
+    if (response.error) {
+      throw response.error;
+    }
     
     // Transform the profiles data to match our User interface
-    const users = data.map(profile => ({
+    const users = (response.data || []).map(profile => ({
       id: profile.id,
       name: profile.name,
       email: profile.email,
@@ -254,13 +269,13 @@ export const getAllUsers = async (): Promise<User[]> => {
       // Add any user metadata from auth if needed
       user_metadata: {
         // Default values, these would need to be updated from auth if needed
-        isAdmin: profile.email.toLowerCase() === ADMIN_EMAIL,
-        role: profile.email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user',
-        banned: false,
+        isAdmin: profile.is_admin || profile.email.toLowerCase() === ADMIN_EMAIL,
+        role: (profile.is_admin || profile.email.toLowerCase() === ADMIN_EMAIL) ? 'admin' : 'user',
+        banned: profile.banned || false,
         name: profile.name
       },
       app_metadata: {
-        provider: 'email' // Default provider
+        provider: profile.provider || 'email' // Default provider
       }
     }));
     
@@ -274,27 +289,28 @@ export const getAllUsers = async (): Promise<User[]> => {
 // Update a user in the profiles table
 export const updateUser = async (userId: string, userData: Partial<User>) => {
   try {
-    const { error } = await supabase
+    const updateData = {
+      name: userData.name,
+      email: userData.email,
+      phone: userData.phone,
+      avatar_url: userData.avatar_url,
+      updated_at: new Date().toISOString(),
+      // Add these fields if you have them in your profiles table
+      is_admin: userData.user_metadata?.isAdmin,
+      banned: userData.user_metadata?.banned
+    };
+    
+    const response = await supabase
       .from('profiles')
-      .update({
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        avatar_url: userData.avatar_url,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+      .update(updateData)
+      .eq('id', userId)
+      .select();
     
-    if (error) throw error;
-    
-    // If updating user metadata (like admin status or banned status)
-    // we would need to use the auth admin APIs separately
-    if (userData.user_metadata) {
-      // This would need to be implemented if you have access to these APIs
-      console.log('Updating user metadata would require auth admin APIs');
+    if (response.error) {
+      throw response.error;
     }
     
-    return { success: true };
+    return { success: true, data: response.data };
   } catch (error: any) {
     console.error('Error updating user:', error.message);
     throw error;
@@ -304,12 +320,14 @@ export const updateUser = async (userId: string, userData: Partial<User>) => {
 // Delete a user from the profiles table
 export const deleteUser = async (userId: string) => {
   try {
-    const { error } = await supabase
+    const response = await supabase
       .from('profiles')
       .delete()
       .eq('id', userId);
     
-    if (error) throw error;
+    if (response.error) {
+      throw response.error;
+    }
     
     // Note: This only deletes the profile record
     // To delete the actual auth user, you would need admin APIs
@@ -324,19 +342,20 @@ export const deleteUser = async (userId: string) => {
 // Ban/unban a user (store this in user metadata)
 export const toggleUserBan = async (userId: string, isBanned: boolean) => {
   try {
-    // This is a simplification - in a real app, you might store this in a separate table
-    // or use the auth admin APIs to update user metadata
-    const { error } = await supabase
+    const response = await supabase
       .from('profiles')
       .update({
+        banned: isBanned,
         updated_at: new Date().toISOString()
-        // In a real app, you might add a `banned` column to the profiles table
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
     
-    if (error) throw error;
+    if (response.error) {
+      throw response.error;
+    }
     
-    return { success: true };
+    return { success: true, data: response.data };
   } catch (error: any) {
     console.error('Error toggling user ban status:', error.message);
     throw error;
@@ -346,19 +365,20 @@ export const toggleUserBan = async (userId: string, isBanned: boolean) => {
 // Toggle admin status (store this in user metadata)
 export const toggleAdminStatus = async (userId: string, isAdmin: boolean) => {
   try {
-    // This is a simplification - in a real app, you might store this in a separate table
-    // or use the auth admin APIs to update user metadata
-    const { error } = await supabase
+    const response = await supabase
       .from('profiles')
       .update({
+        is_admin: isAdmin,
         updated_at: new Date().toISOString()
-        // In a real app, you might add an `is_admin` column to the profiles table
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
     
-    if (error) throw error;
+    if (response.error) {
+      throw response.error;
+    }
     
-    return { success: true };
+    return { success: true, data: response.data };
   } catch (error: any) {
     console.error('Error toggling admin status:', error.message);
     throw error;
